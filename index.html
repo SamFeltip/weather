@@ -10,8 +10,41 @@
       href="https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@100..900&family=Figtree:ital,wght@0,300..900;1,300..900&family=Geist:wght@100..900&family=Unbounded:wght@200..900&display=swap"
       rel="stylesheet"
     />
+    <style>
+      .weather-wrapper {
+        position: relative;
+        height: 100%;
+      }
+
+      /* both stacked in same place */
+      .last-weather,
+      .next-weather {
+        position: absolute;
+        inset: 0;
+        transition:
+          opacity 0.2s ease,
+          visibility 0.2s ease;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      /* visible states */
+      .show-last-weather .last-weather {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .show-next-weather .next-weather {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+    </style>
   </head>
   <body
+    class="show-last-weather"
     style="
       min-height: 100vh;
       display: flex;
@@ -52,6 +85,24 @@
         if (diff < 60) return `${Math.floor(diff / 7)} weeks ago`;
 
         return `${Math.floor(diff / 30)} months ago`;
+      }
+
+      /**
+       * @param {string} weatherType
+       * @param {{ diff: number, date: Date } | null } nextData
+       * @returns {string}
+       * */
+      function getHumanReadableFutureDate(weatherType, nextData) {
+        if (!nextData) return `no ${weatherType} for a while`;
+
+        const { diff, date } = nextData;
+        if (diff === 0) return `${weatherType} later today`;
+        if (diff === 1) return `${weatherType} tomorrow`;
+        if (diff < 7) return `${weatherType} in ${diff} days`;
+        if (diff == 7) return `${weatherType} next week`;
+        if (diff < 60) return `${weatherType} in ${Math.floor(diff / 7)} weeks`;
+
+        return `${weatherType} in ${Math.floor(diff / 30)} months`;
       }
 
       const weatherTypes = {
@@ -99,26 +150,32 @@
 
       /**
        * @param {string} svg
-       * @param {{ diff: number, date: Date } | null} data
+       * @param {{last: { diff: number, date: Date } | null, next: { diff: number, date: Date } | null}} data
        * @returns {string}
        */
-      function createCell(svg, data) {
+      function createCell(svg, key, data) {
         return `
             ${svg}
             ${
-              data
-                ? `<span>
-              <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.diff}</h2>
-              <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data?.date)}</p>
+              data?.last
+                ? `<span class="weather-wrapper">
+                  <span class="last-weather">
+                    <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
+                    <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data.last.date)}</p>
+                  </span>
+                  <span class="next-weather">
+                    <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
+                    <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
+                  </span>
+
             </span>`
                 : `<h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>`
             }
         `;
       }
 
-      async function fetchRange(start, end) {
-        const format = (d) => d.toISOString().split("T")[0];
-        const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&daily=weathercode&timezone=auto&start_date=${format(start)}&end_date=${format(end)}`;
+      async function fetchRange() {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code&past_days=92&forecast_days=16&timezone=auto`;
 
         console.log("[Weather] Request URL:", url);
 
@@ -138,70 +195,58 @@
         const today = new Date();
         const maxLookbackDays = 365 * 5;
 
-        /** @type {Record<string, { diff: number, date: Date } | null>} */
+        /** @type {Record<string, { last: { diff: number, date: Date } | null, next: { diff: number, date: Date } | null }>} */
         const results = {};
-        for (const key in weatherTypes) results[key] = null;
+        for (const key in weatherTypes)
+          results[key] = { last: null, next: null };
 
-        let checkedDays = 0;
-        let end = new Date(today);
+        const data = await fetchRange();
+        if (data) {
+          const days = data.daily.time.map((d) => new Date(d));
+          const codes = data.daily.weather_code;
 
-        while (
-          checkedDays < maxLookbackDays &&
-          Object.values(results).some((v) => v === null)
-        ) {
-          const start = new Date(end);
-          start.setDate(start.getDate() - 89);
+          for (const key in weatherTypes) {
+            const matchCodes = weatherTypes[key].codes;
 
-          const data = await fetchRange(start, end);
-          let foundAny = false;
+            // Find the last occurrence
+            for (let i = codes.length - 1; i >= 0; i--) {
+              if (days[i] > today) {
+                continue;
+              }
 
-          if (data) {
-            const days = data.daily.time;
-            const codes = data.daily.weathercode;
+              if (matchCodes.includes(codes[i])) {
+                const lastDate = days[i];
 
-            for (const key in weatherTypes) {
-              if (results[key] !== null) continue;
-              const matchCodes = weatherTypes[key].codes;
+                const diff = Math.floor(
+                  (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
+                );
 
-              for (let i = codes.length - 1; i >= 0; i--) {
-                if (matchCodes.includes(codes[i])) {
-                  const lastDate = new Date(days[i]);
-                  const diff = Math.floor(
-                    (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
-                  );
-
-                  console.debug({
-                    today: today,
-                    lastDate: lastDate,
-                    diff: (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
-                  });
-
-                  console.log(
-                    `[Weather] Found ${key} on ${days[i]} (${diff} days ago)`,
-                  );
-                  results[key] = { diff, date: lastDate };
-                  foundAny = true;
-                  break;
-                }
+                console.debug(key, {
+                  today,
+                  lastDate,
+                  diff,
+                  d: today.getTime() - lastDate.getTime(),
+                });
+                results[key].last = { diff, date: lastDate };
+                break;
               }
             }
-          }
 
-          if (!foundAny) {
-            console.log(
-              "[Weather] Nothing found in this block, requesting older data...",
-            );
-          }
+            // Find the next occurrence
+            for (let i = 0; i < codes.length; i++) {
+              if (days[i] <= today) {
+                continue;
+              }
 
-          checkedDays += 90;
-          end = new Date(start);
-          end.setDate(end.getDate() - 1);
-        }
-
-        for (const key in results) {
-          if (results[key] === null) {
-            console.log(`[Weather] No ${key} found in lookback window`);
-            results[key] = null;
+              if (matchCodes.includes(codes[i])) {
+                const nextDate = days[i];
+                const diff = Math.floor(
+                  (nextDate.getTime() - today.getTime()) / MS_PER_DAY,
+                );
+                results[key].next = { diff, date: nextDate };
+                break;
+              }
+            }
           }
         }
 
@@ -209,11 +254,47 @@
         if (!grid) throw new Error("Grid element not found");
 
         grid.innerHTML = Object.entries(weatherTypes)
-          .map(([key, val]) => createCell(val.svg, results[key]))
+          .map(([key, val]) => createCell(val.svg, key, results[key]))
           .join("");
       }
 
-      fetchWeather();
+      fetchWeather().then(() => {
+        // Select all SVG elements
+        const svgs = document.querySelectorAll("svg");
+
+        // Animation function
+        function animateSVGs() {
+          svgs.forEach((svg) => {
+            svg.animate(
+              [
+                { transform: "scale(1)" },
+                { transform: "scale(1.1)" },
+                { transform: "scale(1)" },
+              ],
+              {
+                duration: 200, // total animation time (ms)
+                easing: "ease-in-out",
+              },
+            );
+          });
+
+          if (document.body.classList.contains("show-last-weather")) {
+            document.body.classList.remove("show-last-weather");
+            document.body.classList.add("show-next-weather");
+          } else if (document.body.classList.contains("show-next-weather")) {
+            document.body.classList.remove("show-next-weather");
+            document.body.classList.add("show-last-weather");
+          } else {
+            document.body.classList.add("show-last-weather");
+          }
+        }
+
+        // Trigger on click / tap
+        window.addEventListener("pointerdown", animateSVGs);
+
+        // Trigger on any key press
+        window.addEventListener("keydown", animateSVGs);
+      });
     </script>
   </body>
 </html>
