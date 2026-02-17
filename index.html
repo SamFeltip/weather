@@ -11,6 +11,28 @@
       rel="stylesheet"
     />
     <style>
+      #current-weather {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        gap: 4px;
+        display: flex;
+        align-items: center;
+        color: white;
+        font-family: "Figtree";
+        font-size: 20px;
+
+        & svg {
+          width: 54px;
+          height: 54px;
+          margin-bottom: 10px;
+        }
+
+        #current-temp {
+          margin-bottom: 16px;
+        }
+      }
+
       .weather-wrapper {
         position: relative;
         height: 100%;
@@ -53,6 +75,13 @@
       background: linear-gradient(to bottom, #4fc3f7, #81d4fa);
     "
   >
+    <div id="current-weather" style="display: none">
+      <svg></svg>
+      <span id="current-temp">
+        <span id="current-temp-content"></span>&deg;C
+      </span>
+    </div>
+
     <div
       id="weatherGrid"
       style="
@@ -65,6 +94,7 @@
       "
     >
       <svg
+        id="rain"
         width="120"
         height="120"
         viewBox="0 0 64 64"
@@ -107,7 +137,7 @@
         />
       </svg>
       <span id="rain-weather" class="weather-wrapper"></span>
-      <svg width="120" height="120" viewBox="0 0 64 64" fill="none">
+      <svg id="snow" width="120" height="120" viewBox="0 0 64 64" fill="none">
         <circle cx="32" cy="32" r="5" fill="#e3f2fd" />
         <g stroke="#e3f2fd" stroke-width="4">
           <line x1="32" y1="8" x2="32" y2="56" />
@@ -117,7 +147,13 @@
         </g>
       </svg>
       <span id="snow-weather" class="weather-wrapper"></span>
-      <svg width="120" height="120" viewBox="0 0 64 64" fill="none">
+      <svg
+        id="sunshine"
+        width="120"
+        height="120"
+        viewBox="0 0 64 64"
+        fill="none"
+      >
         <circle cx="32" cy="32" r="14" fill="#ffeb3b" />
         <g stroke="#fbc02d" stroke-width="4">
           <line x1="32" y1="2" x2="32" y2="16" />
@@ -132,6 +168,7 @@
       </svg>
       <span id="sun-weather" class="weather-wrapper"></span>
       <svg
+        id="clouds"
         width="120"
         height="120"
         viewBox="0 0 64 64"
@@ -178,8 +215,8 @@
       const SNOW_SHOWERS_SLIGHT = 85;
       const SNOW_SHOWERS_HEAVY = 86;
 
-      const latitude = 53.3676;
-      const longitude = -1.5023;
+      const LATITUDE = 53.3676;
+      const LONGITUDE = -1.5023;
 
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
       const WEATHER_THRESHOLDS = {
@@ -308,7 +345,7 @@
       }
 
       async function fetchRange() {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=weather_code&past_days=60&forecast_days=16&timezone=auto`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=weather_code&past_days=60&forecast_days=16&timezone=auto`;
 
         console.log("[Weather] Request URL:", url);
 
@@ -455,6 +492,86 @@
         // Trigger on any key press
         window.addEventListener("keydown", animateSVGs);
       });
+
+      async function fetchCurrentWeather() {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,weather_code&forecast_days=1`;
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          console.error("Failed to fetch current weather:", res.statusText);
+          throw new Error(`Failed to fetch current weather: ${res.statusText}`);
+        }
+
+        const data = await res.json();
+        if (!data || !data.hourly || !data.hourly.time) {
+          console.error("Invalid weather data format");
+          throw new Error("Invalid weather data format");
+        }
+
+        const currentHour = new Date().getHours();
+        const currentWeatherCode = data.hourly.weather_code[currentHour];
+        const currentTemperature = data.hourly.temperature_2m[currentHour];
+
+        console.log(
+          `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+        );
+        return { currentWeatherCode, currentTemperature };
+      }
+
+      fetchCurrentWeather().then(
+        ({ currentWeatherCode, currentTemperature }) => {
+          console.log(
+            `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+          );
+
+          const weatherType = Object.keys(weatherTypes).find((key) =>
+            weatherTypes[key].codes.includes(currentWeatherCode),
+          );
+
+          console.log(`Current weather type: ${weatherType}`);
+
+          const currentWeatherElem = document.getElementById("current-weather");
+          if (!currentWeatherElem) {
+            console.warn(
+              "[Weather] Element with ID 'current-weather' not found",
+            );
+            return;
+          }
+
+          const weatherSvg = document.querySelector(`svg#${weatherType}`);
+
+          if (!weatherSvg) {
+            console.warn(
+              `[Weather] SVG element for weather type '${weatherType}' not found`,
+            );
+            return;
+          }
+
+          const currentWeatherSvg = currentWeatherElem.querySelector("svg");
+          if (!currentWeatherSvg) {
+            console.warn(
+              "[Weather] No SVG found inside 'currentWeather' element",
+            );
+            return;
+          }
+
+          currentWeatherSvg.outerHTML = weatherSvg.outerHTML;
+
+          const currentWeatherTemp = document.getElementById(
+            "current-temp-content",
+          );
+          if (!currentWeatherTemp) {
+            console.warn(
+              "[Weather] Element with ID 'current-temp-content' not found",
+            );
+            return;
+          }
+
+          currentWeatherTemp.textContent = currentTemperature.toString();
+
+          currentWeatherElem.style.display = "inherit";
+        },
+      );
     </script>
   </body>
 </html>
