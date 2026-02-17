@@ -175,7 +175,7 @@
       }
 
       async function fetchRange() {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code&past_days=92&forecast_days=16&timezone=auto`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code&past_days=60&forecast_days=16&timezone=auto`;
 
         console.log("[Weather] Request URL:", url);
 
