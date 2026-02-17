@@ -67,10 +67,59 @@
 
     <script>
       //@ts-check
+
+      // Clear skies
+      const CLEAR = 0;
+      const MAINLY_CLEAR = 1;
+
+      // Partly cloudy / overcast
+      const PARTLY_CLOUDY = 2;
+      const OVERCAST = 3;
+
+      // Rain / Showers
+      const DRIZZLE_LIGHT = 51;
+      const DRIZZLE_MODERATE = 53;
+      const DRIZZLE_HEAVY = 55;
+      const RAIN_LIGHT = 61;
+      const RAIN_MODERATE = 63;
+      const RAIN_HEAVY = 65;
+      const SHOWERS_SLIGHT = 80;
+      const SHOWERS_MODERATE = 81;
+      const SHOWERS_VIOLENT = 82;
+
+      // Snow / Snow Showers
+      const SNOW_LIGHT = 71;
+      const SNOW_MODERATE = 73;
+      const SNOW_HEAVY = 75;
+      const SNOW_GRAINS = 77;
+      const SNOW_SHOWERS_SLIGHT = 85;
+      const SNOW_SHOWERS_HEAVY = 86;
+
       const latitude = 53.3676;
       const longitude = -1.5023;
 
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
+      const WEATHER_THRESHOLDS = {
+        [CLEAR]: 3,
+        [MAINLY_CLEAR]: 4,
+        [PARTLY_CLOUDY]: 6,
+        [OVERCAST]: 5,
+        [DRIZZLE_LIGHT]: 4,
+        [DRIZZLE_MODERATE]: 4,
+        [DRIZZLE_HEAVY]: 4,
+        [RAIN_LIGHT]: 5,
+        [RAIN_MODERATE]: 5,
+        [RAIN_HEAVY]: 3,
+        [SHOWERS_SLIGHT]: 3,
+        [SHOWERS_MODERATE]: 2,
+        [SHOWERS_VIOLENT]: 2,
+        [SNOW_GRAINS]: 2,
+        [SNOW_LIGHT]: 2,
+        [SNOW_MODERATE]: 1,
+        [SNOW_HEAVY]: 1,
+        [SNOW_SHOWERS_SLIGHT]: 2,
+        [SNOW_SHOWERS_HEAVY]: 2,
+      }; // minimum number of hours in a day with the weather code to count as an occurrence
 
       /** @param {Date} date */
       function getHumanReadableTimePeriod(date) {
@@ -122,15 +171,34 @@
           </svg>
 
           `,
-          codes: [51, 53, 55, 61, 63, 65, 80, 81, 82],
+          codes: [
+            DRIZZLE_LIGHT,
+            DRIZZLE_MODERATE,
+            DRIZZLE_HEAVY,
+            RAIN_LIGHT,
+            RAIN_MODERATE,
+            RAIN_HEAVY,
+            SHOWERS_SLIGHT,
+            SHOWERS_MODERATE,
+            SHOWERS_VIOLENT,
+            SNOW_SHOWERS_SLIGHT,
+            SNOW_SHOWERS_HEAVY,
+          ],
         },
         snow: {
           svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="5" fill="#e3f2fd"/><g stroke="#e3f2fd" stroke-width="4"><line x1="32" y1="8" x2="32" y2="56"/><line x1="8" y1="32" x2="56" y2="32"/><line x1="18" y1="18" x2="46" y2="46"/><line x1="46" y1="18" x2="18" y2="46"/></g></svg>`,
-          codes: [71, 73, 75, 85, 86],
+          codes: [
+            SNOW_LIGHT,
+            SNOW_MODERATE,
+            SNOW_GRAINS,
+            SNOW_HEAVY,
+            SNOW_SHOWERS_SLIGHT,
+            SNOW_SHOWERS_HEAVY,
+          ],
         },
         sunshine: {
           svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="14" fill="#ffeb3b"/><g stroke="#fbc02d" stroke-width="4"><line x1="32" y1="2" x2="32" y2="16"/><line x1="32" y1="48" x2="32" y2="62"/><line x1="2" y1="32" x2="16" y2="32"/><line x1="48" y1="32" x2="62" y2="32"/><line x1="12" y1="12" x2="22" y2="22"/><line x1="42" y1="42" x2="52" y2="52"/><line x1="42" y1="22" x2="52" y2="12"/><line x1="12" y1="52" x2="22" y2="42"/></g></svg>`,
-          codes: [0, 1],
+          codes: [CLEAR, MAINLY_CLEAR],
         },
         clouds: {
           svg: `
@@ -144,7 +212,7 @@
           </svg>
 
           `,
-          codes: [2, 3],
+          codes: [PARTLY_CLOUDY, OVERCAST],
         },
       };
 
@@ -156,26 +224,30 @@
       function createCell(svg, key, data) {
         return `
             ${svg}
-            ${
-              data?.last
-                ? `<span class="weather-wrapper">
+            ${`<span class="weather-wrapper">
                   <span class="last-weather">
-                    <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
+                ${
+                  data?.last
+                    ? `
+                <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
                     <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data.last.date)}</p>
+                    `
+                    : `
+                    <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
+                    `
+                }
                   </span>
                   <span class="next-weather">
                     <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
                     <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
                   </span>
 
-            </span>`
-                : `<h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>`
-            }
+            </span>`}
         `;
       }
 
       async function fetchRange() {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code&past_days=60&forecast_days=16&timezone=auto`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=weather_code&past_days=60&forecast_days=16&timezone=auto`;
 
         console.log("[Weather] Request URL:", url);
 
@@ -183,7 +255,7 @@
           const res = await fetch(url);
           if (!res.ok) return null;
           const data = await res.json();
-          if (!data || !data.daily || !data.daily.time) return null;
+          if (!data || !data.hourly || !data.hourly.time) return null;
           return data;
         } catch (err) {
           console.log("[Weather] API error:", err);
@@ -202,46 +274,76 @@
 
         const data = await fetchRange();
         if (data) {
-          const days = data.daily.time.map((d) => new Date(d));
-          const codes = data.daily.weather_code;
+          const hours = data.hourly.time.map((t) => new Date(t));
+          const codes = data.hourly.weather_code;
 
           for (const key in weatherTypes) {
             const matchCodes = weatherTypes[key].codes;
+            console.debug(`[Weather] ${key}`);
+
+            // Group by day
+            const dailyCounts = {};
+            hours.forEach((hour, index) => {
+              const hourOfDay = hour.getHours();
+
+              const dayKey = hour.toISOString().split("T")[0];
+              if (!dailyCounts[dayKey]) dailyCounts[dayKey] = {};
+
+              const code = codes[index];
+              if (!dailyCounts[dayKey][code]) dailyCounts[dayKey][code] = 0;
+              dailyCounts[dayKey][code]++;
+            });
+
+            console.log(dailyCounts);
 
             // Find the last occurrence
-            for (let i = codes.length - 1; i >= 0; i--) {
-              if (days[i] > today) {
-                continue;
-              }
+            const days = Object.keys(dailyCounts).sort(
+              (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+            );
+            for (const day of days) {
+              const counts = dailyCounts[day];
 
-              if (matchCodes.includes(codes[i])) {
-                const lastDate = days[i];
-
+              if (
+                matchCodes.some(
+                  (code) => counts[code] >= WEATHER_THRESHOLDS[code],
+                )
+              ) {
+                const lastDate = new Date(day);
                 const diff = Math.floor(
                   (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
                 );
 
-                console.debug(key, {
-                  today,
-                  lastDate,
-                  diff,
-                  d: today.getTime() - lastDate.getTime(),
-                });
+                if (diff < 0) {
+                  continue;
+                }
+
+                console.debug(
+                  `[Weather] Found last ${key} on ${day} (${diff} days ago)`,
+                );
                 results[key].last = { diff, date: lastDate };
                 break;
               }
             }
 
             // Find the next occurrence
-            for (let i = 0; i < codes.length; i++) {
-              if (days[i] <= today) {
-                continue;
-              }
-
-              if (matchCodes.includes(codes[i])) {
-                const nextDate = days[i];
+            for (const day of days.reverse()) {
+              const counts = dailyCounts[day];
+              if (
+                matchCodes.some(
+                  (code) => counts[code] >= WEATHER_THRESHOLDS[code],
+                )
+              ) {
+                const nextDate = new Date(day);
                 const diff = Math.floor(
                   (nextDate.getTime() - today.getTime()) / MS_PER_DAY,
+                );
+
+                if (diff < 0) {
+                  continue;
+                }
+
+                console.debug(
+                  `[Weather] Found next ${key} on ${day} (in ${diff} days)`,
                 );
                 results[key].next = { diff, date: nextDate };
                 break;
