@@ -1,127 +1,213 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Weather</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="min-h-screen flex items-center justify-center" style="background: linear-gradient(to bottom, #4fc3f7, #81d4fa);">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@100..900&family=Figtree:ital,wght@0,300..900;1,300..900&family=Geist:wght@100..900&family=Unbounded:wght@200..900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body
+    style="
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(to bottom, #4fc3f7, #81d4fa);
+    "
+  >
+    <div
+      id="weatherGrid"
+      style="
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+        align-items: center;
+        gap: 3.5rem;
+        padding: 3rem;
+      "
+    ></div>
 
-  <div id="weatherGrid" class="grid grid-cols-1 gap-14 p-12"></div>
+    <script>
+      //@ts-check
+      const latitude = 53.3676;
+      const longitude = -1.5023;
 
-<script>
-const latitude = 53.38;
-const longitude = -1.47;
+      /** @param {Date} date */
+      function getHumanReadableTimePeriod(date) {
+        const today = new Date();
+        const diff = today.getDate() - date.getDate();
+        if (diff === 0) return "today";
+        if (diff === 1) return "yesterday";
+        if (diff < 7) return `${diff} days ago`;
+        if (diff == 7) return `last week`;
+        if (diff < 30) return `${Math.floor(diff / 7)} weeks ago`;
+        if (diff == 30) return `last month`;
+        return `${Math.floor(diff / 30)} months ago`;
+      }
 
-const weatherTypes = {
-  rain: {
-    svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><ellipse cx="32" cy="26" rx="18" ry="12" fill="#90caf9"/><circle cx="24" cy="24" r="10" fill="#bbdefb"/><circle cx="40" cy="24" r="10" fill="#bbdefb"/><line x1="22" y1="40" x2="18" y2="54" stroke="#1e88e5" stroke-width="4"/><line x1="32" y1="40" x2="28" y2="54" stroke="#1e88e5" stroke-width="4"/><line x1="42" y1="40" x2="38" y2="54" stroke="#1e88e5" stroke-width="4"/></svg>`,
-    codes: [51,53,55,61,63,65,80,81,82]
-  },
-  snow: {
-    svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="5" fill="#e3f2fd"/><g stroke="#e3f2fd" stroke-width="4"><line x1="32" y1="8" x2="32" y2="56"/><line x1="8" y1="32" x2="56" y2="32"/><line x1="18" y1="18" x2="46" y2="46"/><line x1="46" y1="18" x2="18" y2="46"/></g></svg>`,
-    codes: [71,73,75,85,86]
-  },
-  sunshine: {
-    svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="14" fill="#ffeb3b"/><g stroke="#fbc02d" stroke-width="4"><line x1="32" y1="2" x2="32" y2="16"/><line x1="32" y1="48" x2="32" y2="62"/><line x1="2" y1="32" x2="16" y2="32"/><line x1="48" y1="32" x2="62" y2="32"/><line x1="12" y1="12" x2="22" y2="22"/><line x1="42" y1="42" x2="52" y2="52"/><line x1="42" y1="22" x2="52" y2="12"/><line x1="12" y1="52" x2="22" y2="42"/></g></svg>`,
-    codes: [0]
-  },
-  clouds: {
-    svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><ellipse cx="32" cy="36" rx="18" ry="12" fill="#eceff1"/><circle cx="24" cy="32" r="10" fill="#cfd8dc"/><circle cx="40" cy="32" r="10" fill="#cfd8dc"/></svg>`,
-    codes: [1,2,3]
-  }
-};
+      const weatherTypes = {
+        rain: {
+          svg: `
+      <svg width="120" height="120" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g fill="#bbdefb">
+              <circle cx="32" cy="24" r="13" />
+              <circle cx="18" cy="32" r="10" />
+              <circle cx="46" cy="32" r="10" />
+              <rect x="18" y="30" width="28" height="12" />
+            </g>
 
-function createCell(svg, days) {
-  return `
-    <div class="flex items-center gap-8 justify-center">
-      ${svg}
-      <div style="font-size:72px;font-weight:700;color:white">${days}</div>
-    </div>
-  `;
-}
+            <line x1="24" y1="48" x2="20" y2="58" stroke="#1e88e5" stroke-width="4" stroke-linecap="round"/>
+            <line x1="36" y1="50" x2="32" y2="60" stroke="#1e88e5" stroke-width="4" stroke-linecap="round"/>
+            <line x1="48" y1="48" x2="44" y2="58" stroke="#1e88e5" stroke-width="4" stroke-linecap="round"/>
+          </svg>
 
-async function fetchRange(start, end) {
-  const format = d => d.toISOString().split('T')[0];
-  const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&daily=weathercode&timezone=auto&start_date=${format(start)}&end_date=${format(end)}`;
+          `,
+          codes: [51, 53, 55, 61, 63, 65, 80, 81, 82],
+        },
+        snow: {
+          svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="5" fill="#e3f2fd"/><g stroke="#e3f2fd" stroke-width="4"><line x1="32" y1="8" x2="32" y2="56"/><line x1="8" y1="32" x2="56" y2="32"/><line x1="18" y1="18" x2="46" y2="46"/><line x1="46" y1="18" x2="18" y2="46"/></g></svg>`,
+          codes: [71, 73, 75, 85, 86],
+        },
+        sunshine: {
+          svg: `<svg width="120" height="120" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="14" fill="#ffeb3b"/><g stroke="#fbc02d" stroke-width="4"><line x1="32" y1="2" x2="32" y2="16"/><line x1="32" y1="48" x2="32" y2="62"/><line x1="2" y1="32" x2="16" y2="32"/><line x1="48" y1="32" x2="62" y2="32"/><line x1="12" y1="12" x2="22" y2="22"/><line x1="42" y1="42" x2="52" y2="52"/><line x1="42" y1="22" x2="52" y2="12"/><line x1="12" y1="52" x2="22" y2="42"/></g></svg>`,
+          codes: [0],
+        },
+        clouds: {
+          svg: `
+      <svg width="120" height="120" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g fill="#bbdefb">
+              <circle cx="32" cy="24" r="13" />
+              <circle cx="18" cy="32" r="10" />
+              <circle cx="46" cy="32" r="10" />
+              <rect x="18" y="30" width="28" height="12" />
+            </g>
+          </svg>
 
-  console.log("[Weather] Request URL:", url);
+          `,
+          codes: [1, 2, 3],
+        },
+      };
 
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data || !data.daily || !data.daily.time) return null;
-    return data;
-  } catch (err) {
-    console.log("[Weather] API error:", err);
-    return null;
-  }
-}
+      /**
+       * @param {string} svg
+       * @param {{ diff: number, date: Date } | null} data
+       * @returns {string}
+       */
+      function createCell(svg, data) {
+        return `
+            ${svg}
+            ${
+              data
+                ? `<span>
+              <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.diff}</h2>
+              <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data?.date)}</p>
+            </span>`
+                : `<h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>`
+            }
+        `;
+      }
 
-async function fetchWeather() {
-  const today = new Date();
-  const maxLookbackDays = 365 * 5;
+      async function fetchRange(start, end) {
+        const format = (d) => d.toISOString().split("T")[0];
+        const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&daily=weathercode&timezone=auto&start_date=${format(start)}&end_date=${format(end)}`;
 
-  const results = {};
-  for (const key in weatherTypes) results[key] = null;
+        console.log("[Weather] Request URL:", url);
 
-  let checkedDays = 0;
-  let end = new Date(today);
-
-  while (checkedDays < maxLookbackDays && Object.values(results).some(v => v === null)) {
-    const start = new Date(end);
-    start.setDate(start.getDate() - 89);
-
-    const data = await fetchRange(start, end);
-    let foundAny = false;
-
-    if (data) {
-      const days = data.daily.time;
-      const codes = data.daily.weathercode;
-
-      for (const key in weatherTypes) {
-        if (results[key] !== null) continue;
-        const matchCodes = weatherTypes[key].codes;
-
-        for (let i = codes.length - 1; i >= 0; i--) {
-          if (matchCodes.includes(codes[i])) {
-            const lastDate = new Date(days[i]);
-            const diff = Math.floor((today - lastDate) / (1000*60*60*24));
-            console.log(`[Weather] Found ${key} on ${days[i]} (${diff} days ago)`);
-            results[key] = diff;
-            foundAny = true;
-            break;
-          }
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (!data || !data.daily || !data.daily.time) return null;
+          return data;
+        } catch (err) {
+          console.log("[Weather] API error:", err);
+          return null;
         }
       }
-    }
 
-    if (!foundAny) {
-      console.log("[Weather] Nothing found in this block, requesting older data...");
-    }
+      async function fetchWeather() {
+        const today = new Date();
+        const maxLookbackDays = 365 * 5;
 
-    checkedDays += 90;
-    end = new Date(start);
-    end.setDate(end.getDate() - 1);
-  }
+        /** @type {Record<string, { diff: number, date: Date } | null>} */
+        const results = {};
+        for (const key in weatherTypes) results[key] = null;
 
-  for (const key in results) {
-    if (results[key] === null) {
-      console.log(`[Weather] No ${key} found in lookback window`);
-      results[key] = "—";
-    }
-  }
+        let checkedDays = 0;
+        let end = new Date(today);
 
-  const grid = document.getElementById("weatherGrid");
-  grid.innerHTML = Object.entries(weatherTypes)
-    .map(([key, val]) => createCell(val.svg, results[key]))
-    .join("");
-}
+        while (
+          checkedDays < maxLookbackDays &&
+          Object.values(results).some((v) => v === null)
+        ) {
+          const start = new Date(end);
+          start.setDate(start.getDate() - 89);
 
-fetchWeather();
-</script>
+          const data = await fetchRange(start, end);
+          let foundAny = false;
 
-</body>
+          if (data) {
+            const days = data.daily.time;
+            const codes = data.daily.weathercode;
+
+            for (const key in weatherTypes) {
+              if (results[key] !== null) continue;
+              const matchCodes = weatherTypes[key].codes;
+
+              for (let i = codes.length - 1; i >= 0; i--) {
+                if (matchCodes.includes(codes[i])) {
+                  const lastDate = new Date(days[i]);
+                  const diff = today.getDate() - lastDate.getDate();
+
+                  console.debug({
+                    today: today,
+                    lastDate: lastDate,
+                    diff: today.getDate() - lastDate.getDate(),
+                  });
+
+                  console.log(
+                    `[Weather] Found ${key} on ${days[i]} (${diff} days ago)`,
+                  );
+                  results[key] = { diff, date: lastDate };
+                  foundAny = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!foundAny) {
+            console.log(
+              "[Weather] Nothing found in this block, requesting older data...",
+            );
+          }
+
+          checkedDays += 90;
+          end = new Date(start);
+          end.setDate(end.getDate() - 1);
+        }
+
+        for (const key in results) {
+          if (results[key] === null) {
+            console.log(`[Weather] No ${key} found in lookback window`);
+            results[key] = null;
+          }
+        }
+
+        const grid = document.getElementById("weatherGrid");
+        if (!grid) throw new Error("Grid element not found");
+
+        grid.innerHTML = Object.entries(weatherTypes)
+          .map(([key, val]) => createCell(val.svg, results[key]))
+          .join("");
+      }
+
+      fetchWeather();
+    </script>
+  </body>
 </html>
