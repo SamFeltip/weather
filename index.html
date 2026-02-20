@@ -70,18 +70,34 @@
     style="
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       background: linear-gradient(to bottom, #4fc3f7, #81d4fa);
     "
   >
     <div id="current-weather" style="display: none">
-      <svg></svg>
+      <!-- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+        <path
+          d="M320 64C214 64 128 148.4 128 252.6C128 371.9 248.2 514.9 298.4 569.4C310.2 582.2 329.8 582.2 341.6 569.4C391.8 514.9 512 371.9 512 252.6C512 148.4 426 64 320 64z"
+        />
+      </svg> -->
+      <svg id="current-weather-icon"></svg>
       <span id="current-temp">
         <span id="current-temp-content"></span>&deg;C
       </span>
     </div>
 
+    <div id="rain-timeline">
+      <ul>
+        <li>one</li>
+        <li>two</li>
+        <li>three</li>
+        <li>four</li>
+        <li>five</li>
+        <li>six</li>
+      </ul>
+    </div>
     <div
       id="weatherGrid"
       style="
@@ -233,9 +249,9 @@
         [SHOWERS_SLIGHT]: 3,
         [SHOWERS_MODERATE]: 2,
         [SHOWERS_VIOLENT]: 2,
-        [SNOW_GRAINS]: 2,
-        [SNOW_LIGHT]: 2,
-        [SNOW_MODERATE]: 1,
+        [SNOW_GRAINS]: 4,
+        [SNOW_LIGHT]: 4,
+        [SNOW_MODERATE]: 3,
         [SNOW_HEAVY]: 1,
         [SNOW_SHOWERS_SLIGHT]: 2,
         [SNOW_SHOWERS_HEAVY]: 2,
@@ -455,6 +471,33 @@
           .join("");
       }
 
+      async function fetchCurrentWeather() {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,weather_code&forecast_days=1`;
+
+        console.debug("[Weather] Fetching current weather with URL:", url);
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          console.error("Failed to fetch current weather:", res.statusText);
+          throw new Error(`Failed to fetch current weather: ${res.statusText}`);
+        }
+
+        const data = await res.json();
+        if (!data || !data.hourly || !data.hourly.time) {
+          console.error("Invalid weather data format");
+          throw new Error("Invalid weather data format");
+        }
+
+        const currentHour = new Date().getHours();
+        const currentWeatherCode = data.hourly.weather_code[currentHour];
+        const currentTemperature = data.hourly.temperature_2m[currentHour];
+
+        console.log(
+          `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+        );
+        return { currentWeatherCode, currentTemperature };
+      }
+
       fetchWeather().then(() => {
         // Select all SVG elements
         const svgs = document.querySelectorAll("svg");
@@ -493,31 +536,6 @@
         window.addEventListener("keydown", animateSVGs);
       });
 
-      async function fetchCurrentWeather() {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,weather_code&forecast_days=1`;
-
-        const res = await fetch(url);
-        if (!res.ok) {
-          console.error("Failed to fetch current weather:", res.statusText);
-          throw new Error(`Failed to fetch current weather: ${res.statusText}`);
-        }
-
-        const data = await res.json();
-        if (!data || !data.hourly || !data.hourly.time) {
-          console.error("Invalid weather data format");
-          throw new Error("Invalid weather data format");
-        }
-
-        const currentHour = new Date().getHours();
-        const currentWeatherCode = data.hourly.weather_code[currentHour];
-        const currentTemperature = data.hourly.temperature_2m[currentHour];
-
-        console.log(
-          `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
-        );
-        return { currentWeatherCode, currentTemperature };
-      }
-
       fetchCurrentWeather().then(
         ({ currentWeatherCode, currentTemperature }) => {
           console.log(
@@ -547,7 +565,9 @@
             return;
           }
 
-          const currentWeatherSvg = currentWeatherElem.querySelector("svg");
+          const currentWeatherSvg = currentWeatherElem.querySelector(
+            "svg#current-weather-icon",
+          );
           if (!currentWeatherSvg) {
             console.warn(
               "[Weather] No SVG found inside 'currentWeather' element",
