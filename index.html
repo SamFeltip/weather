@@ -63,6 +63,97 @@
         visibility: visible;
         pointer-events: auto;
       }
+
+      #rain-timeline {
+        .graph {
+          position: relative;
+          /* width: 100%; */
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          box-sizing: border-box;
+        }
+
+        .baseline {
+          position: absolute;
+          top: 50%;
+
+          width: 100%;
+          height: 1.2px;
+          background: rgb(88, 155, 208);
+          /* opacity: 0.4; */
+          transform: translateY(-50%);
+          border-radius: 5px;
+          z-index: 1;
+        }
+
+        .hour-marker {
+          position: absolute;
+          left: calc(var(--hour-position) / 16 * 100%);
+          width: 1.3px;
+          border-radius: 5px;
+          height: 40px;
+          background: white;
+          /* opacity: 0.4; */
+          transform: translateX(-50%) translateY(-50%);
+          z-index: 1;
+
+          /* add a ball to the bottom of the hour market */
+          &::before {
+            content: "";
+            position: absolute;
+            top: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 5px;
+            height: 5px;
+            background: white;
+            border-radius: 50%;
+          }
+        }
+
+        .column {
+          position: relative;
+          width: 7px;
+          margin-inline: 2px;
+          height: 100%;
+          display: flex;
+          justify-content: center;
+          border-radius: 5px;
+
+          &::before {
+            border-radius: 15px 15px 0px 0px;
+          }
+
+          &::after {
+            border-radius: 0px 0px 15px 15px;
+          }
+        }
+
+        /* Top bar */
+        .column::before {
+          content: "";
+          position: absolute;
+          bottom: 50%;
+          width: 100%;
+          height: var(--top-height, 40px);
+          background: #bbdefb;
+          transform-origin: bottom;
+          transition: height 0.3s ease;
+        }
+
+        /* Bottom bar */
+        .column::after {
+          content: "";
+          position: absolute;
+          top: 50%;
+          width: 100%;
+          height: var(--bottom-height, 40px);
+          background: #1e88e5;
+          transform-origin: top;
+          transition: height 0.3s ease;
+        }
+      }
     </style>
   </head>
   <body
@@ -88,15 +179,27 @@
       </span>
     </div>
 
-    <div id="rain-timeline">
-      <ul>
-        <li>one</li>
-        <li>two</li>
-        <li>three</li>
-        <li>four</li>
-        <li>five</li>
-        <li>six</li>
-      </ul>
+    <div id="rain-timeline" style="visibility: hidden; padding-top: 120px">
+      <div class="graph">
+        <div class="baseline"></div>
+        <div class="hour-marker"></div>
+        <div class="column" data-index="6"></div>
+        <div class="column" data-index="7"></div>
+        <div class="column" data-index="8"></div>
+        <div class="column" data-index="9"></div>
+        <div class="column" data-index="10"></div>
+        <div class="column" data-index="11"></div>
+        <div class="column" data-index="12"></div>
+        <div class="column" data-index="13"></div>
+        <div class="column" data-index="14"></div>
+        <div class="column" data-index="15"></div>
+        <div class="column" data-index="16"></div>
+        <div class="column" data-index="17"></div>
+        <div class="column" data-index="18"></div>
+        <div class="column" data-index="19"></div>
+        <div class="column" data-index="20"></div>
+        <div class="column" data-index="21"></div>
+      </div>
     </div>
     <div
       id="weatherGrid"
@@ -264,7 +367,7 @@
       }; // minimum number of hours in a day with the weather code to count as an occurrence
 
       const RAIN_THRESHOLD = 1; // in mm
-      const SNOW_THRESHOLD = 0.5; // in cm
+      const SNOW_THRESHOLD = 0.1; // in cm
 
       /**
        * @typedef {{ diff: number, date: Date }} WeatherOccurrence
@@ -285,14 +388,14 @@
        * @typedef {{
        *   time: string[],
        *   weather_code: number[],
-       *   temperature_2m?: number[],
-       *   rain?: number[],
-       *   showers?: number[],
-       *   snowfall?: number[],
-       *   snow_depth?: number[],
-       *   cloud_cover_low?: number[],
-       *   cloud_cover_mid?: number[],
-       *   cloud_cover_high?: number[]
+       *   temperature_2m: number[],
+       *   rain: number[],
+       *   showers: number[],
+       *   snowfall: number[],
+       *   snow_depth: number[],
+       *   cloud_cover_low: number[],
+       *   cloud_cover_mid: number[],
+       *   cloud_cover_high: number[]
        * }} HourlyData
        */
 
@@ -581,7 +684,7 @@
       }
 
       /**
-       * @returns {Promise<{ currentWeatherCode: number, currentTemperature: number }>}
+       * @returns {Promise<HourlyData>}
        */
       async function fetchCurrentWeather() {
         const hourly_params = [
@@ -614,22 +717,59 @@
           throw new Error(`Failed to fetch current weather: ${res.statusText}`);
         }
 
-        /** @type {{ hourly: Required<Pick<HourlyData, "time" | "weather_code" | "temperature_2m">> }} */
+        /** @type {{ hourly: HourlyData }} */
         const data = await res.json();
 
-        if (!data || !data.hourly || !data.hourly.time) {
+        if (
+          !data ||
+          !data.hourly ||
+          !data.hourly.time ||
+          !data.hourly.weather_code ||
+          !data.hourly.temperature_2m
+        ) {
           console.error("Invalid weather data format");
           throw new Error("Invalid weather data format");
         }
 
-        const currentHour = new Date().getHours();
-        const currentWeatherCode = data.hourly.weather_code[currentHour];
-        const currentTemperature = data.hourly.temperature_2m[currentHour];
+        return data.hourly;
+      }
 
-        console.log(
-          `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+      const MAX_BAR_HEIGHT = 30; // in pixels
+
+      /**
+       * @param {number} index
+       * @param {number} height as a %
+       * @returns {void}
+       */
+      function setTopBar(index, height) {
+        /** @type {HTMLElement?} */
+        const column = document.querySelector(
+          `#rain-timeline .column[data-index="${index}"]`,
         );
-        return { currentWeatherCode, currentTemperature };
+        if (!column) {
+          return;
+        }
+
+        const heightPx = `${Math.floor(MAX_BAR_HEIGHT * height)}px`;
+        column.style.setProperty("--top-height", heightPx);
+      }
+
+      /**
+       * @param {number} index
+       * @param {number} height as a %
+       * @returns {void}
+       */
+      function setBottomBar(index, height) {
+        /** @type {HTMLElement?} */
+        const column = document.querySelector(
+          `#rain-timeline .column[data-index="${index}"]`,
+        );
+        if (!column) {
+          return;
+        }
+
+        const heightPx = `${Math.floor(MAX_BAR_HEIGHT * height)}px`;
+        column.style.setProperty("--bottom-height", heightPx);
       }
 
       fetchWeather().then(() => {
@@ -668,62 +808,135 @@
         window.addEventListener("keydown", animateSVGs);
       });
 
-      fetchCurrentWeather().then(
-        ({ currentWeatherCode, currentTemperature }) => {
-          console.log(
-            `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+      const RAIN_TIMELINE_OFFSET = 6;
+
+      fetchCurrentWeather().then((hourlyData) => {
+        const currentHour = new Date().getHours();
+        const currentWeatherCode = hourlyData.weather_code[currentHour];
+        const currentTemperature = hourlyData.temperature_2m[currentHour];
+
+        console.log(
+          `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+        );
+
+        console.log(
+          `Current weather code: ${currentWeatherCode}, temperature: ${currentTemperature}°C`,
+        );
+
+        const weatherType = Object.keys(weatherTypes).find((key) =>
+          weatherTypes[key].codes.includes(currentWeatherCode),
+        );
+
+        console.log(`Current weather type: ${weatherType}`);
+
+        const currentWeatherElem = document.getElementById("current-weather");
+        if (!currentWeatherElem) {
+          console.warn("[Weather] Element with ID 'current-weather' not found");
+          return;
+        }
+
+        const weatherSvg = document.querySelector(`svg#${weatherType}`);
+
+        if (!weatherSvg) {
+          console.warn(
+            `[Weather] SVG element for weather type '${weatherType}' not found`,
           );
+          return;
+        }
 
-          const weatherType = Object.keys(weatherTypes).find((key) =>
-            weatherTypes[key].codes.includes(currentWeatherCode),
+        const currentWeatherSvg = currentWeatherElem.querySelector(
+          "svg#current-weather-icon",
+        );
+        if (!currentWeatherSvg) {
+          console.warn(
+            "[Weather] No SVG found inside 'currentWeather' element",
           );
+          return;
+        }
 
-          console.log(`Current weather type: ${weatherType}`);
+        currentWeatherSvg.outerHTML = weatherSvg.outerHTML;
 
-          const currentWeatherElem = document.getElementById("current-weather");
-          if (!currentWeatherElem) {
-            console.warn(
-              "[Weather] Element with ID 'current-weather' not found",
-            );
-            return;
-          }
-
-          const weatherSvg = document.querySelector(`svg#${weatherType}`);
-
-          if (!weatherSvg) {
-            console.warn(
-              `[Weather] SVG element for weather type '${weatherType}' not found`,
-            );
-            return;
-          }
-
-          const currentWeatherSvg = currentWeatherElem.querySelector(
-            "svg#current-weather-icon",
+        const currentWeatherTemp = document.getElementById(
+          "current-temp-content",
+        );
+        if (!currentWeatherTemp) {
+          console.warn(
+            "[Weather] Element with ID 'current-temp-content' not found",
           );
-          if (!currentWeatherSvg) {
-            console.warn(
-              "[Weather] No SVG found inside 'currentWeather' element",
-            );
-            return;
-          }
+          return;
+        }
 
-          currentWeatherSvg.outerHTML = weatherSvg.outerHTML;
+        currentWeatherTemp.textContent = currentTemperature.toString();
 
-          const currentWeatherTemp = document.getElementById(
-            "current-temp-content",
-          );
-          if (!currentWeatherTemp) {
-            console.warn(
-              "[Weather] Element with ID 'current-temp-content' not found",
-            );
-            return;
-          }
+        currentWeatherElem.style.display = "inherit";
 
-          currentWeatherTemp.textContent = currentTemperature.toString();
+        const rainTimeline = document.getElementById("rain-timeline");
+        if (!rainTimeline) {
+          console.warn("[Weather] Element with ID 'rain-timeline' not found");
+          return;
+        }
 
-          currentWeatherElem.style.display = "inherit";
-        },
-      );
+        console.log(`Setting current hour position to ${currentHour}`);
+
+        const currentHourPosition = Math.max(
+          Math.min(currentHour - RAIN_TIMELINE_OFFSET, 16),
+          0,
+        ); // since our timeline starts at 6am
+
+        rainTimeline.style.setProperty(
+          "--hour-position",
+          currentHourPosition.toString(),
+        );
+
+        // Select all elements with the class .column
+        document
+          .querySelectorAll(".column")
+          .forEach((/** @type{HTMLElement} */ el) => {
+            const index = parseInt(el.dataset.index || "", 10);
+
+            // If data-index is lower than --hour-position, set opacity to 0.5
+            if (index < currentHourPosition + RAIN_TIMELINE_OFFSET) {
+              el.style.opacity = "0.5";
+            }
+          });
+
+        const todayRainTimelineData = hourlyData.rain;
+        console.debug("Today's rain timeline data:", todayRainTimelineData);
+
+        const noRain = todayRainTimelineData.every((rain) => rain === 0);
+        if (noRain) {
+          console.log("No rain expected today, hiding rain timeline");
+          return;
+        }
+
+        rainTimeline.style.visibility = "visible";
+
+        todayRainTimelineData.forEach((rain, index) => {
+          setBottomBar(index, rain);
+        });
+
+        const todayCloudTimelineData = hourlyData.cloud_cover_low.map(
+          (low, index) =>
+            Math.max(
+              low,
+              hourlyData.cloud_cover_mid[index],
+              hourlyData.cloud_cover_high[index],
+            ),
+        );
+
+        console.debug("Today's cloud timeline data:", todayCloudTimelineData);
+
+        const noClouds = todayCloudTimelineData.every((cloud) => cloud === 0);
+
+        if (noClouds) {
+          console.log("No clouds expected today");
+          return;
+        }
+
+        todayCloudTimelineData.forEach((cloud, index) => {
+          setTopBar(index, cloud / 100);
+        });
+      });
     </script>
   </body>
 </html>
