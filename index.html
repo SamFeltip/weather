@@ -751,7 +751,12 @@
           return;
         }
 
-        const heightPx = `${Math.floor(MAX_BAR_HEIGHT * height)}px`;
+        if (height === 0) {
+          column.style.removeProperty("--top-height");
+          return;
+        }
+
+        const heightPx = `${Math.max(2, Math.floor(MAX_BAR_HEIGHT * height))}px`;
         column.style.setProperty("--top-height", heightPx);
       }
 
@@ -769,7 +774,12 @@
           return;
         }
 
-        const heightPx = `${Math.floor(MAX_BAR_HEIGHT * height)}px`;
+        if (height === 0) {
+          column.style.removeProperty("--bottom-height");
+          return;
+        }
+
+        const heightPx = `${Math.max(Math.floor(MAX_BAR_HEIGHT * height), 2)}px`;
         column.style.setProperty("--bottom-height", heightPx);
       }
 
