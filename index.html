@@ -913,7 +913,7 @@
         rainTimeline.style.visibility = "visible";
 
         const maxRain = Math.max(...todayRainTimelineData);
-        const HEAVY_RAIN_THRESHOLD = 3;
+        const HEAVY_RAIN_THRESHOLD = 2;
 
         const heaviness_offset = Math.min(1, maxRain / HEAVY_RAIN_THRESHOLD);
 
