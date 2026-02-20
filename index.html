@@ -235,6 +235,12 @@
       const LONGITUDE = -1.5023;
 
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+      /**
+       * @typedef {Object.<number, number>} WeatherThresholds
+       */
+
+      /** @type {WeatherThresholds} */
       const WEATHER_THRESHOLDS = {
         [CLEAR]: 3,
         [MAINLY_CLEAR]: 4,
@@ -260,39 +266,54 @@
       const RAIN_THRESHOLD = 1; // in mm
       const SNOW_THRESHOLD = 0.5; // in cm
 
-      /** @param {Date} date */
-      function getHumanReadableTimePeriod(date) {
-        const today = new Date();
-        const diff = Math.floor(
-          (today.getTime() - date.getTime()) / MS_PER_DAY,
-        );
-        if (diff === 0) return "earlier today";
-        if (diff === 1) return "yesterday";
-        if (diff < 7) return `${diff} days ago`;
-        if (diff == 7) return `last week`;
-        if (diff < 60) return `${Math.floor(diff / 7)} weeks ago`;
-
-        return `${Math.floor(diff / 30)} months ago`;
-      }
+      /**
+       * @typedef {{ diff: number, date: Date }} WeatherOccurrence
+       */
 
       /**
-       * @param {string} weatherType
-       * @param {{ diff: number, date: Date } | null } nextData
-       * @returns {string}
-       * */
-      function getHumanReadableFutureDate(weatherType, nextData) {
-        if (!nextData) return `no ${weatherType} for a while`;
+       * @typedef {{ last: WeatherOccurrence | null, next: WeatherOccurrence | null }} WeatherResult
+       */
 
-        const { diff, date } = nextData;
-        if (diff === 0) return `${weatherType} later today`;
-        if (diff === 1) return `${weatherType} tomorrow`;
-        if (diff < 7) return `${weatherType} in ${diff} days`;
-        if (diff == 7) return `${weatherType} next week`;
-        if (diff < 60) return `${weatherType} in ${Math.floor(diff / 7)} weeks`;
+      /**
+       * @typedef {{
+       *   elemId: string,
+       *   codes: number[]
+       * }} WeatherTypeConfig
+       */
 
-        return `${weatherType} in ${Math.floor(diff / 30)} months`;
-      }
+      /**
+       * @typedef {{
+       *   time: string[],
+       *   weather_code: number[],
+       *   temperature_2m?: number[],
+       *   rain?: number[],
+       *   showers?: number[],
+       *   snowfall?: number[],
+       *   snow_depth?: number[],
+       *   cloud_cover_low?: number[],
+       *   cloud_cover_mid?: number[],
+       *   cloud_cover_high?: number[]
+       * }} HourlyData
+       */
 
+      /**
+       * @typedef {{
+       *   time: string[],
+       *   rain_sum: number[],
+       *   showers_sum: number[],
+       *   snowfall_sum: number[],
+       *   precipitation_sum: number[]
+       * }} DailyData
+       */
+
+      /**
+       * @typedef {{
+       *   hourly: HourlyData,
+       *   daily: DailyData
+       * }} ForecastResponse
+       */
+
+      /** @type {{ rain: WeatherTypeConfig, snow: WeatherTypeConfig, sunshine: WeatherTypeConfig, clouds: WeatherTypeConfig }} */
       const weatherTypes = {
         rain: {
           elemId: "rain-weather",
@@ -332,37 +353,78 @@
       };
 
       /**
+       * @param {Date} date
+       * @returns {string}
+       */
+      function getHumanReadableTimePeriod(date) {
+        const today = new Date();
+        const diff = Math.floor(
+          (today.getTime() - date.getTime()) / MS_PER_DAY,
+        );
+        if (diff === 0) return "earlier today";
+        if (diff === 1) return "yesterday";
+        if (diff < 7) return `${diff} days ago`;
+        if (diff == 7) return `last week`;
+        if (diff < 60) return `${Math.floor(diff / 7)} weeks ago`;
+
+        return `${Math.floor(diff / 30)} months ago`;
+      }
+
+      /**
+       * @param {string} weatherType
+       * @param {WeatherOccurrence | null} nextData
+       * @returns {string}
+       */
+      function getHumanReadableFutureDate(weatherType, nextData) {
+        if (!nextData) return `no ${weatherType} for a while`;
+
+        const { diff } = nextData;
+        if (diff === 0) return `${weatherType} later today`;
+        if (diff === 1) return `${weatherType} tomorrow`;
+        if (diff < 7) return `${weatherType} in ${diff} days`;
+        if (diff == 7) return `${weatherType} next week`;
+        if (diff < 60) return `${weatherType} in ${Math.floor(diff / 7)} weeks`;
+
+        return `${weatherType} in ${Math.floor(diff / 30)} months`;
+      }
+
+      /**
        * @param {string} elemId
-       * @param {{last: { diff: number, date: Date } | null, next: { diff: number, date: Date } | null}} data
+       * @param {string} key
+       * @param {WeatherResult} data
+       * @returns {void}
        */
       function createCell(elemId, key, data) {
         const elem = document.getElementById(elemId);
         if (!elem) {
           console.warn(`[Weather] Element with ID '${elemId}' not found`);
-          return "";
+          throw new Error(`Element with ID '${elemId}' not found`);
         }
 
         elem.innerHTML = `
-                  <span class="last-weather">
-                ${
-                  data?.last
-                    ? `
-                <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
-                    <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data.last.date)}</p>
-                    `
-                    : `
-                    <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
-                    `
-                }
-                  </span>
-                  <span class="next-weather">
-                    <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
-                    <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
-                  </span>
+            <span class="last-weather">
+          ${
+            data?.last
+              ? `
+          <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
+              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data.last.date)}</p>
+              `
+              : `
+              <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
+              `
+          }
+            </span>
+            <span class="next-weather">
+              <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
+              <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
+            </span>
 
-            `;
+      `;
       }
 
+      /**
+       * @returns {Promise<ForecastResponse | null>}
+       */
       async function fetchRange() {
         const hourly_params = ["weather_code"];
         const daily_params = [
@@ -388,6 +450,7 @@
         try {
           const res = await fetch(url);
           if (!res.ok) return null;
+          /** @type {ForecastResponse} */
           const data = await res.json();
           if (!data || !data.hourly || !data.hourly.time) return null;
           return data;
@@ -397,13 +460,20 @@
         }
       }
 
+      /**
+       * @returns {Promise<void | null>}
+       */
       async function fetchWeather() {
         const today = new Date();
         const maxLookbackDays = 365 * 5;
 
-        const results = {};
-        for (const key in weatherTypes)
-          results[key] = { last: null, next: null };
+        /** @type {{ [K in keyof typeof weatherTypes]: WeatherResult }} */
+        const results = {
+          rain: { last: null, next: null },
+          snow: { last: null, next: null },
+          sunshine: { last: null, next: null },
+          clouds: { last: null, next: null },
+        };
 
         const data = await fetchRange();
         if (!data) {
@@ -417,7 +487,6 @@
         for (const key in weatherTypes) {
           console.debug(`[Weather] ${key}`);
 
-          // Group by day
           const dailyData = days.map((day, index) => ({
             date: day,
             rain: data.daily.rain_sum[index] || 0,
@@ -425,7 +494,9 @@
             snow: data.daily.snowfall_sum[index] || 0,
           }));
 
+          /** @type {{ [day: string]: { [code: number]: number } }} */
           const dailyCounts = {};
+
           hours.forEach((hour, index) => {
             const dayKey = hour.toISOString().split("T")[0];
             if (!dailyCounts[dayKey]) dailyCounts[dayKey] = {};
@@ -435,7 +506,6 @@
             dailyCounts[dayKey][code]++;
           });
 
-          // Find the last occurrence
           for (const daily of dailyData.reverse()) {
             const dayKey = daily.date.toISOString().split("T")[0];
             const isRainy =
@@ -470,7 +540,6 @@
             }
           }
 
-          // Find the next occurrence
           for (const daily of dailyData.reverse()) {
             const dayKey = daily.date.toISOString().split("T")[0];
             const isRainy =
@@ -511,6 +580,9 @@
           .join("");
       }
 
+      /**
+       * @returns {Promise<{ currentWeatherCode: number, currentTemperature: number }>}
+       */
       async function fetchCurrentWeather() {
         const hourly_params = [
           "temperature_2m",
@@ -542,7 +614,9 @@
           throw new Error(`Failed to fetch current weather: ${res.statusText}`);
         }
 
+        /** @type {{ hourly: Required<Pick<HourlyData, "time" | "weather_code" | "temperature_2m">> }} */
         const data = await res.json();
+
         if (!data || !data.hourly || !data.hourly.time) {
           console.error("Invalid weather data format");
           throw new Error("Invalid weather data format");
@@ -559,10 +633,11 @@
       }
 
       fetchWeather().then(() => {
-        // Select all SVG elements
         const svgs = document.querySelectorAll("svg");
 
-        // Animation function
+        /**
+         * @returns {void}
+         */
         function animateSVGs() {
           svgs.forEach((svg) => {
             svg.animate(
@@ -572,7 +647,7 @@
                 { transform: "scale(1)" },
               ],
               {
-                duration: 200, // total animation time (ms)
+                duration: 200,
                 easing: "ease-in-out",
               },
             );
@@ -589,10 +664,7 @@
           }
         }
 
-        // Trigger on click / tap
         window.addEventListener("pointerdown", animateSVGs);
-
-        // Trigger on any key press
         window.addEventListener("keydown", animateSVGs);
       });
 
