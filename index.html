@@ -401,7 +401,6 @@
         const today = new Date();
         const maxLookbackDays = 365 * 5;
 
-        /** @type {Record<string, { last: { diff: number, date: Date } | null, next: { diff: number, date: Date } | null }>} */
         const results = {};
         for (const key in weatherTypes)
           results[key] = { last: null, next: null };
