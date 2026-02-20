@@ -257,13 +257,16 @@
         [SNOW_SHOWERS_HEAVY]: 2,
       }; // minimum number of hours in a day with the weather code to count as an occurrence
 
+      const RAIN_THRESHOLD = 1; // in mm
+      const SNOW_THRESHOLD = 0.5; // in cm
+
       /** @param {Date} date */
       function getHumanReadableTimePeriod(date) {
         const today = new Date();
         const diff = Math.floor(
           (today.getTime() - date.getTime()) / MS_PER_DAY,
         );
-        if (diff === 0) return "today";
+        if (diff === 0) return "earlier today";
         if (diff === 1) return "yesterday";
         if (diff < 7) return `${diff} days ago`;
         if (diff == 7) return `last week`;
@@ -361,7 +364,24 @@
       }
 
       async function fetchRange() {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=weather_code&past_days=60&forecast_days=16&timezone=auto`;
+        const hourly_params = ["weather_code"];
+        const daily_params = [
+          "rain_sum",
+          "showers_sum",
+          "snowfall_sum",
+          "precipitation_sum",
+        ];
+
+        const url = new URL("https://api.open-meteo.com/v1/forecast");
+        url.search = new URLSearchParams({
+          latitude: LATITUDE.toString(),
+          longitude: LONGITUDE.toString(),
+          hourly: hourly_params.join(","),
+          daily: daily_params.join(","),
+          past_days: "60",
+          forecast_days: "16",
+          timezone: "auto",
+        }).toString();
 
         console.log("[Weather] Request URL:", url);
 
@@ -387,81 +407,102 @@
           results[key] = { last: null, next: null };
 
         const data = await fetchRange();
-        if (data) {
-          const hours = data.hourly.time.map((t) => new Date(t));
-          const codes = data.hourly.weather_code;
+        if (!data) {
+          return null;
+        }
 
-          for (const key in weatherTypes) {
-            const matchCodes = weatherTypes[key].codes;
-            console.debug(`[Weather] ${key}`);
+        const hours = data.hourly.time.map((t) => new Date(t));
+        const codes = data.hourly.weather_code;
+        const days = data.daily.time.map((t) => new Date(t));
 
-            // Group by day
-            const dailyCounts = {};
-            hours.forEach((hour, index) => {
-              const hourOfDay = hour.getHours();
+        for (const key in weatherTypes) {
+          console.debug(`[Weather] ${key}`);
 
-              const dayKey = hour.toISOString().split("T")[0];
-              if (!dailyCounts[dayKey]) dailyCounts[dayKey] = {};
+          // Group by day
+          const dailyData = days.map((day, index) => ({
+            date: day,
+            rain: data.daily.rain_sum[index] || 0,
+            showers: data.daily.showers_sum[index] || 0,
+            snow: data.daily.snowfall_sum[index] || 0,
+          }));
 
-              const code = codes[index];
-              if (!dailyCounts[dayKey][code]) dailyCounts[dayKey][code] = 0;
-              dailyCounts[dayKey][code]++;
-            });
+          const dailyCounts = {};
+          hours.forEach((hour, index) => {
+            const dayKey = hour.toISOString().split("T")[0];
+            if (!dailyCounts[dayKey]) dailyCounts[dayKey] = {};
 
-            console.log(dailyCounts);
+            const code = codes[index];
+            if (!dailyCounts[dayKey][code]) dailyCounts[dayKey][code] = 0;
+            dailyCounts[dayKey][code]++;
+          });
 
-            // Find the last occurrence
-            const days = Object.keys(dailyCounts).sort(
-              (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-            );
-            for (const day of days) {
-              const counts = dailyCounts[day];
+          // Find the last occurrence
+          for (const daily of dailyData.reverse()) {
+            const dayKey = daily.date.toISOString().split("T")[0];
+            const isRainy =
+              key === "rain" && daily.rain + daily.showers >= RAIN_THRESHOLD;
+            const isSnowy = key === "snow" && daily.snow >= SNOW_THRESHOLD;
+            const isSunny =
+              key === "sunshine" &&
+              weatherTypes[key].codes.some(
+                (code) => dailyCounts[dayKey]?.[code],
+              );
+            const isCloudy =
+              key === "clouds" &&
+              weatherTypes[key].codes.some(
+                (code) => dailyCounts[dayKey]?.[code],
+              );
 
-              if (
-                matchCodes.some(
-                  (code) => counts[code] >= WEATHER_THRESHOLDS[code],
-                )
-              ) {
-                const lastDate = new Date(day);
-                const diff = Math.floor(
-                  (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
-                );
+            if (isRainy || isSnowy || isSunny || isCloudy) {
+              const lastDate = daily.date;
+              const diff = Math.floor(
+                (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
+              );
 
-                if (diff < 0) {
-                  continue;
-                }
-
-                console.debug(
-                  `[Weather] Found last ${key} on ${day} (${diff} days ago)`,
-                );
-                results[key].last = { diff, date: lastDate };
-                break;
+              if (diff < 0) {
+                continue;
               }
+
+              console.debug(
+                `[Weather] Found last ${key} on ${lastDate.toISOString().split("T")[0]} (${diff} days ago)`,
+              );
+              results[key].last = { diff, date: lastDate };
+              break;
             }
+          }
 
-            // Find the next occurrence
-            for (const day of days.reverse()) {
-              const counts = dailyCounts[day];
-              if (
-                matchCodes.some(
-                  (code) => counts[code] >= WEATHER_THRESHOLDS[code],
-                )
-              ) {
-                const nextDate = new Date(day);
-                const diff = Math.floor(
-                  (nextDate.getTime() - today.getTime()) / MS_PER_DAY,
-                );
+          // Find the next occurrence
+          for (const daily of dailyData.reverse()) {
+            const dayKey = daily.date.toISOString().split("T")[0];
+            const isRainy =
+              key === "rain" && daily.rain + daily.showers >= RAIN_THRESHOLD;
+            const isSnowy = key === "snow" && daily.snow >= SNOW_THRESHOLD;
+            const isSunny =
+              key === "sunshine" &&
+              weatherTypes[key].codes.some(
+                (code) => dailyCounts[dayKey]?.[code],
+              );
+            const isCloudy =
+              key === "clouds" &&
+              weatherTypes[key].codes.some(
+                (code) => dailyCounts[dayKey]?.[code],
+              );
 
-                if (diff < 0) {
-                  continue;
-                }
+            if (isRainy || isSnowy || isSunny || isCloudy) {
+              const nextDate = daily.date;
+              const diff = Math.floor(
+                (nextDate.getTime() - today.getTime()) / MS_PER_DAY,
+              );
 
-                console.debug(
-                  `[Weather] Found next ${key} on ${day} (in ${diff} days)`,
-                );
-                results[key].next = { diff, date: nextDate };
-                break;
+              if (diff < 0) {
+                continue;
               }
+
+              console.debug(
+                `[Weather] Found next ${key} on ${nextDate.toISOString().split("T")[0]} (in ${diff} days)`,
+              );
+              results[key].next = { diff, date: nextDate };
+              break;
             }
           }
         }
@@ -472,9 +513,29 @@
       }
 
       async function fetchCurrentWeather() {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,weather_code&forecast_days=1`;
+        const hourly_params = [
+          "temperature_2m",
+          "weather_code",
+          "rain",
+          "showers",
+          "snowfall",
+          "snow_depth",
+          "cloud_cover_low",
+          "cloud_cover_mid",
+          "cloud_cover_high",
+        ];
 
-        console.debug("[Weather] Fetching current weather with URL:", url);
+        const params = new URLSearchParams({
+          latitude: LATITUDE.toString(),
+          longitude: LONGITUDE.toString(),
+          hourly: hourly_params.join(","),
+          forecast_days: "1",
+        });
+
+        const url = new URL("https://api.open-meteo.com/v1/forecast");
+        url.search = params.toString();
+
+        console.debug("[Weather] Fetching current weather:", url.toString());
 
         const res = await fetch(url);
         if (!res.ok) {
