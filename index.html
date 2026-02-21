@@ -114,26 +114,31 @@
 
         .column {
           position: relative;
-          width: 7px;
+          width: 12px;
           margin-inline: 2px;
           height: 100%;
           display: flex;
           justify-content: center;
           border-radius: 5px;
 
+          line-height: calc(var(--top-height) * 2 + 12px);
+          font-size: 0.5rem;
+          text-align: center;
+          font-family: "Figtree";
+
           &::before {
-            border-radius: 15px 15px 0px 0px;
+            border-radius: 0px 0px 15px 15px;
           }
 
           &::after {
-            content: attr(index);
-            border-radius: 0px 0px 15px 15px;
+            border-radius: 15px 15px 0px 0px;
           }
         }
 
         /* Top bar */
-        .column::before {
+        .column::after {
           content: "";
+          color: white;
           position: absolute;
           bottom: 50%;
           width: 100%;
@@ -144,7 +149,7 @@
         }
 
         /* Bottom bar */
-        .column::after {
+        .column::before {
           content: "";
           position: absolute;
           top: 50%;
@@ -153,6 +158,10 @@
           background: #1e88e5;
           transform-origin: top;
           transition: height 0.3s ease;
+        }
+
+        .column:nth-child(3n)::after {
+          content: attr(data-index);
         }
       }
     </style>
