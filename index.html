@@ -224,8 +224,8 @@
     >
       <svg
         id="rain"
-        width="120"
-        height="120"
+        width="100"
+        height="100"
         viewBox="0 0 64 64"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -266,7 +266,7 @@
         />
       </svg>
       <span id="rain-weather" class="weather-wrapper"></span>
-      <svg id="snow" width="120" height="120" viewBox="0 0 64 64" fill="none">
+      <svg id="snow" width="100" height="100" viewBox="0 0 64 64" fill="none">
         <circle cx="32" cy="32" r="5" fill="#e3f2fd" />
         <g stroke="#e3f2fd" stroke-width="4">
           <line x1="32" y1="8" x2="32" y2="56" />
@@ -278,8 +278,8 @@
       <span id="snow-weather" class="weather-wrapper"></span>
       <svg
         id="sunshine"
-        width="120"
-        height="120"
+        width="100"
+        height="100"
         viewBox="0 0 64 64"
         fill="none"
       >
@@ -298,8 +298,8 @@
       <span id="sun-weather" class="weather-wrapper"></span>
       <svg
         id="clouds"
-        width="120"
-        height="120"
+        width="100"
+        height="100"
         viewBox="0 0 64 64"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -520,16 +520,16 @@
           ${
             data?.last
               ? `
-          <h2 style="line-height:0.8;padding-block-start:1.7rem;margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
+          <h2 style="line-height:0.8;padding-block-start:1.2rem;margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
               <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(key, data.last.date)}</p>
               `
               : `
-              <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
+              <h2 style="margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
               `
           }
             </span>
             <span class="next-weather">
-              <h2 style="line-height:0.8;padding-block-start:1.7rem;margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
+              <h2 style="line-height:0.8;padding-block-start:1.2rem;margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
               <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
             </span>
 
