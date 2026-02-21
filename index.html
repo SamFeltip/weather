@@ -457,21 +457,22 @@
       };
 
       /**
+       * @param {string} key
        * @param {Date} date
        * @returns {string}
        */
-      function getHumanReadableTimePeriod(date) {
+      function getHumanReadableTimePeriod(key, date) {
         const today = new Date();
         const diff = Math.floor(
           (today.getTime() - date.getTime()) / MS_PER_DAY,
         );
-        if (diff === 0) return "earlier today";
-        if (diff === 1) return "yesterday";
-        if (diff < 7) return `${diff} days ago`;
-        if (diff == 7) return `last week`;
-        if (diff < 60) return `${Math.floor(diff / 7)} weeks ago`;
+        if (diff === 0) return `${key} earlier today`;
+        if (diff === 1) return `${key} yesterday`;
+        if (diff < 7) return `${key} ${diff} days ago`;
+        if (diff == 7) return `${key} last week`;
+        if (diff < 60) return `${key} ${Math.floor(diff / 7)} weeks ago`;
 
-        return `${Math.floor(diff / 30)} months ago`;
+        return `${key} ${Math.floor(diff / 30)} months ago`;
       }
 
       /**
@@ -510,8 +511,8 @@
           ${
             data?.last
               ? `
-          <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
-              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(data.last.date)}</p>
+          <h2 style="line-height:0.8;padding-block-start:1.7rem;margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
+              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(key, data.last.date)}</p>
               `
               : `
               <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
@@ -519,7 +520,7 @@
           }
             </span>
             <span class="next-weather">
-              <h2 style="margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
+              <h2 style="line-height:0.8;padding-block-start:1.7rem;margin:0;text-align:center;font-size:72px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
               <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
             </span>
 
