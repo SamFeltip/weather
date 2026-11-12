@@ -351,43 +351,28 @@
 
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-      /**
-       * @typedef {Object.<number, number>} WeatherThresholds
-       */
-
-      /** @type {WeatherThresholds} */
-      const WEATHER_THRESHOLDS = {
-        [CLEAR]: 3,
-        [MAINLY_CLEAR]: 4,
-        [PARTLY_CLOUDY]: 6,
-        [OVERCAST]: 5,
-        [DRIZZLE_LIGHT]: 4,
-        [DRIZZLE_MODERATE]: 4,
-        [DRIZZLE_HEAVY]: 4,
-        [RAIN_LIGHT]: 5,
-        [RAIN_MODERATE]: 5,
-        [RAIN_HEAVY]: 3,
-        [SHOWERS_SLIGHT]: 3,
-        [SHOWERS_MODERATE]: 2,
-        [SHOWERS_VIOLENT]: 2,
-        [SNOW_GRAINS]: 4,
-        [SNOW_LIGHT]: 4,
-        [SNOW_MODERATE]: 3,
-        [SNOW_HEAVY]: 1,
-        [SNOW_SHOWERS_SLIGHT]: 2,
-        [SNOW_SHOWERS_HEAVY]: 2,
-      }; // minimum number of hours in a day with the weather code to count as an occurrence
+      const WEATHER_TIMEZONE = "Europe/London";
+      const RECENT_HISTORY_DAYS = 60;
+      const NEAR_FORECAST_DAYS = 16;
+      const SEASONAL_FORECAST_DAYS = 210;
+      const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
+      const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
+      const SEASONAL_URL = "https://seasonal-api.open-meteo.com/v1/forecast";
 
       const RAIN_THRESHOLD = 1; // in mm
       const SNOW_THRESHOLD = 0.1; // in cm
+      const localDateTime = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: WEATHER_TIMEZONE,
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+      const displayDate = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "UTC",
+        dateStyle: "long",
+      });
 
-      /**
-       * @typedef {{ diff: number, date: Date }} WeatherOccurrence
-       */
-
-      /**
-       * @typedef {{ last: WeatherOccurrence | null, next: WeatherOccurrence | null }} WeatherResult
-       */
+      /** @typedef {{ diff: number, date: string, seasonal?: boolean }} WeatherOccurrence */
+      /** @typedef {{ last: WeatherOccurrence | null, next: WeatherOccurrence | null }} WeatherResult */
 
       /**
        * @typedef {{
@@ -413,20 +398,15 @@
 
       /**
        * @typedef {{
-       *   time: string[],
-       *   rain_sum: number[],
-       *   showers_sum: number[],
-       *   snowfall_sum: number[],
-       *   precipitation_sum: number[]
-       * }} DailyData
+       *   hourly: {time: string[], weather_code: (number | null)[], rain?: (number | null)[],
+       *     showers?: (number | null)[], snowfall?: (number | null)[]},
+       *   daily: {time: string[], rain_sum: (number | null)[],
+       *     showers_sum?: (number | null)[], snowfall_sum: (number | null)[]}
+       * }} WeatherRange
        */
 
-      /**
-       * @typedef {{
-       *   hourly: HourlyData,
-       *   daily: DailyData
-       * }} ForecastResponse
-       */
+      /** @typedef {{ rain: number, snow: number, codes: Set<number> }} Conditions */
+      /** @typedef {keyof typeof weatherTypes} WeatherType */
 
       /** @type {{ rain: WeatherTypeConfig, snow: WeatherTypeConfig, sunshine: WeatherTypeConfig, clouds: WeatherTypeConfig }} */
       const weatherTypes = {
@@ -469,14 +449,10 @@
 
       /**
        * @param {string} key
-       * @param {Date} date
+       * @param {number} diff
        * @returns {string}
        */
-      function getHumanReadableTimePeriod(key, date) {
-        const today = new Date();
-        const diff = Math.floor(
-          (today.getTime() - date.getTime()) / MS_PER_DAY,
-        );
+      function getHumanReadableTimePeriod(key, diff) {
         if (diff === 0) return `${key} earlier today`;
         if (diff === 1) return `${key} yesterday`;
         if (diff < 7) return `${key} ${diff} days ago`;
@@ -492,7 +468,7 @@
        * @returns {string}
        */
       function getHumanReadableFutureDate(weatherType, nextData) {
-        if (!nextData) return `no ${weatherType} for a while`;
+        if (!nextData) return `no ${weatherType} date available`;
 
         const { diff } = nextData;
         if (diff === 0) return `${weatherType} later today`;
@@ -523,7 +499,7 @@
             data?.last
               ? `
           <h2 style="line-height:0.8;padding-block-start:1.2rem;margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
-              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableTimePeriod(key, data.last.date)}</p>
+              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;"><time datetime="${data.last.date}" title="${displayDate.format(new Date(data.last.date))}">${getHumanReadableTimePeriod(key, data.last.diff)}</time></p>
               `
               : `
               <h2 style="margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
@@ -532,168 +508,185 @@
             </span>
             <span class="next-weather">
               <h2 style="line-height:0.8;padding-block-start:1.2rem;margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
-              <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${getHumanReadableFutureDate(key, data.next)}</p>
+              <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${
+                data.next
+                  ? `<time datetime="${data.next.date}" title="${displayDate.format(new Date(data.next.date))}">${getHumanReadableFutureDate(key, data.next)}</time>`
+                  : getHumanReadableFutureDate(key, null)
+              }${data.next?.seasonal ? "<br>long-range estimate" : ""}</p>
             </span>
 
       `;
       }
 
       /**
-       * @returns {Promise<ForecastResponse | null>}
+       * @param {string} endpoint
+       * @param {Record<string, string>} params
+       * @returns {Promise<WeatherRange | null>}
        */
-      async function fetchRange() {
-        const hourly_params = ["weather_code"];
-        const daily_params = [
-          "rain_sum",
-          "showers_sum",
-          "snowfall_sum",
-          "precipitation_sum",
-        ];
-
-        const url = new URL("https://api.open-meteo.com/v1/forecast");
+      async function fetchRange(endpoint, params) {
+        const url = new URL(endpoint);
         url.search = new URLSearchParams({
           latitude: LATITUDE.toString(),
           longitude: LONGITUDE.toString(),
-          hourly: hourly_params.join(","),
-          daily: daily_params.join(","),
-          past_days: "60",
-          forecast_days: "16",
-          timezone: "auto",
+          timezone: WEATHER_TIMEZONE,
+          hourly: "weather_code",
+          daily: "rain_sum,showers_sum,snowfall_sum",
+          ...params,
         }).toString();
 
-        console.log("[Weather] Request URL:", url);
-
         try {
-          const res = await fetch(url);
-          if (!res.ok) return null;
-          /** @type {ForecastResponse} */
-          const data = await res.json();
-          if (!data || !data.hourly || !data.hourly.time) return null;
+          const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          /** @type {WeatherRange} */
+          const data = await response.json();
+          if (
+            !data?.daily?.time?.length ||
+            !Array.isArray(data.daily.rain_sum) ||
+            !Array.isArray(data.daily.snowfall_sum) ||
+            !Array.isArray(data.hourly?.time) ||
+            !Array.isArray(data.hourly.weather_code)
+          ) {
+            throw new Error("Invalid weather range");
+          }
           return data;
-        } catch (err) {
-          console.log("[Weather] API error:", err);
+        } catch (error) {
+          console.warn(`[Weather] Could not load ${url.hostname}`, error);
           return null;
         }
       }
 
       /**
-       * @returns {Promise<void | null>}
+       * @param {WeatherRange} data
+       * @param {string} now
+       * @param {"last" | "next"} direction
+       * @returns {Map<string, Conditions>}
        */
-      async function fetchWeather() {
-        const today = new Date();
-        const maxLookbackDays = 365 * 5;
+      function getDailyConditions(data, now, direction) {
+        const today = now.slice(0, 10);
+        /** @type {Map<string, Conditions>} */
+        const days = new Map();
 
-        /** @type {{ [K in keyof typeof weatherTypes]: WeatherResult }} */
-        const results = {
-          rain: { last: null, next: null },
-          snow: { last: null, next: null },
-          sunshine: { last: null, next: null },
-          clouds: { last: null, next: null },
-        };
-
-        const data = await fetchRange();
-        if (!data) {
-          return null;
-        }
-
-        const hours = data.hourly.time.map((t) => new Date(t));
-        const codes = data.hourly.weather_code;
-        const days = data.daily.time.map((t) => new Date(t));
-
-        for (const key in weatherTypes) {
-          console.debug(`[Weather] ${key}`);
-
-          const dailyData = days.map((day, index) => ({
-            date: day,
-            rain: data.daily.rain_sum[index] || 0,
-            showers: data.daily.showers_sum[index] || 0,
-            snow: data.daily.snowfall_sum[index] || 0,
-          }));
-
-          /** @type {{ [day: string]: { [code: number]: number } }} */
-          const dailyCounts = {};
-
-          hours.forEach((hour, index) => {
-            const dayKey = hour.toISOString().split("T")[0];
-            if (!dailyCounts[dayKey]) dailyCounts[dayKey] = {};
-
-            const code = codes[index];
-            if (!dailyCounts[dayKey][code]) dailyCounts[dayKey][code] = 0;
-            dailyCounts[dayKey][code]++;
+        data.daily.time.forEach((date, index) => {
+          days.set(date, {
+            rain: date === today ? 0 :
+              (data.daily.rain_sum[index] ?? 0) + (data.daily.showers_sum?.[index] ?? 0),
+            snow: date === today ? 0 : (data.daily.snowfall_sum[index] ?? 0),
+            codes: new Set(),
           });
+        });
 
-          for (const daily of dailyData.reverse()) {
-            const dayKey = daily.date.toISOString().split("T")[0];
-            const isRainy =
-              key === "rain" && daily.rain + daily.showers >= RAIN_THRESHOLD;
-            const isSnowy = key === "snow" && daily.snow >= SNOW_THRESHOLD;
-            const isSunny =
-              key === "sunshine" &&
-              weatherTypes[key].codes.some(
-                (code) => dailyCounts[dayKey]?.[code],
-              );
-            const isCloudy =
-              key === "clouds" &&
-              weatherTypes[key].codes.some(
-                (code) => dailyCounts[dayKey]?.[code],
-              );
-
-            if (isRainy || isSnowy || isSunny || isCloudy) {
-              const lastDate = daily.date;
-              const diff = Math.floor(
-                (today.getTime() - lastDate.getTime()) / MS_PER_DAY,
-              );
-
-              if (diff < 0) {
-                continue;
-              }
-
-              console.debug(
-                `[Weather] Found last ${key} on ${lastDate.toISOString().split("T")[0]} (${diff} days ago)`,
-              );
-              results[key].last = { diff, date: lastDate };
-              break;
-            }
+        data.hourly.time.forEach((hour, index) => {
+          const date = hour.slice(0, 10);
+          const day = days.get(date);
+          if (!day) return;
+          if (date === today) {
+            if (direction === "last" ? hour > now : hour <= now) return;
+            day.rain += (data.hourly.rain?.[index] ?? 0) + (data.hourly.showers?.[index] ?? 0);
+            day.snow += data.hourly.snowfall?.[index] ?? 0;
           }
+          const code = data.hourly.weather_code[index];
+          if (code != null) day.codes.add(code);
+        });
 
-          for (const daily of dailyData.reverse()) {
-            const dayKey = daily.date.toISOString().split("T")[0];
-            const isRainy =
-              key === "rain" && daily.rain + daily.showers >= RAIN_THRESHOLD;
-            const isSnowy = key === "snow" && daily.snow >= SNOW_THRESHOLD;
-            const isSunny =
-              key === "sunshine" &&
-              weatherTypes[key].codes.some(
-                (code) => dailyCounts[dayKey]?.[code],
-              );
-            const isCloudy =
-              key === "clouds" &&
-              weatherTypes[key].codes.some(
-                (code) => dailyCounts[dayKey]?.[code],
-              );
+        return days;
+      }
 
-            if (isRainy || isSnowy || isSunny || isCloudy) {
-              const nextDate = daily.date;
-              const diff = Math.floor(
-                (nextDate.getTime() - today.getTime()) / MS_PER_DAY,
-              );
+      /**
+       * @param {WeatherType} key
+       * @param {Conditions} day
+       */
+      function matchesWeather(key, day) {
+        if (key === "rain") return day.rain >= RAIN_THRESHOLD;
+        if (key === "snow") return day.snow >= SNOW_THRESHOLD;
+        return weatherTypes[key].codes.some((code) => day.codes.has(code));
+      }
 
-              if (diff < 0) {
-                continue;
-              }
-
-              console.debug(
-                `[Weather] Found next ${key} on ${nextDate.toISOString().split("T")[0]} (in ${diff} days)`,
-              );
-              results[key].next = { diff, date: nextDate };
-              break;
-            }
-          }
+      /**
+       * @param {Map<string, Conditions>} days
+       * @param {WeatherType} key
+       * @param {string} today
+       * @param {"last" | "next"} direction
+       * @param {string} boundary
+       * @returns {WeatherOccurrence | null}
+       */
+      function findOccurrence(days, key, today, direction, boundary) {
+        let match = null;
+        for (const [date, conditions] of days) {
+          const inRange = direction === "last" ? date <= boundary : date >= boundary;
+          if (!inRange || !matchesWeather(key, conditions)) continue;
+          match = date;
+          if (direction === "next") break;
         }
+        if (!match) return null;
+        return {
+          date: match,
+          diff: Math.abs(Date.parse(match) - Date.parse(today)) / MS_PER_DAY,
+        };
+      }
 
-        Object.entries(weatherTypes)
-          .map(([key, val]) => createCell(val.elemId, key, results[key]))
-          .join("");
+      /** @param {number} timestamp */
+      function dateString(timestamp) {
+        return new Date(timestamp).toISOString().slice(0, 10);
+      }
+
+      async function fetchWeather() {
+        const now = localDateTime.format(new Date()).replace(" ", "T");
+        const today = now.slice(0, 10);
+        const todayTime = Date.parse(today);
+        const previousYear = Number(today.slice(0, 4)) - 2;
+        const twoYearsAgo = today.endsWith("-02-29")
+          ? `${previousYear}-02-28`
+          : `${previousYear}${today.slice(4)}`;
+        /** @type {WeatherType[]} */
+        const keys = /** @type {WeatherType[]} */ (Object.keys(weatherTypes));
+
+        const recent = await fetchRange(FORECAST_URL, {
+          hourly: "weather_code,rain,showers,snowfall",
+          past_days: String(RECENT_HISTORY_DAYS),
+          forecast_days: String(NEAR_FORECAST_DAYS),
+        });
+        const recentPast = recent ? getDailyConditions(recent, now, "last") : new Map();
+        const nearFuture = recent ? getDailyConditions(recent, now, "next") : new Map();
+        const results = keys.map((key) => ({
+          key,
+          last: findOccurrence(recentPast, key, today, "last", today),
+          next: findOccurrence(nearFuture, key, today, "next", today),
+        }));
+
+        const archiveEnd = dateString(
+          (recent ? Date.parse(recent.daily.time[0]) : todayTime) - MS_PER_DAY,
+        );
+        const seasonalStart = dateString(
+          (recent ? Date.parse(recent.daily.time.at(-1) ?? today) : todayTime) + MS_PER_DAY,
+        );
+        const [archive, seasonal] = await Promise.all([
+          results.some(({ last }) => !last)
+            ? fetchRange(ARCHIVE_URL, {
+                start_date: twoYearsAgo,
+                end_date: archiveEnd,
+                daily: "rain_sum,snowfall_sum",
+              })
+            : null,
+          results.some(({ next }) => !next)
+            ? fetchRange(SEASONAL_URL, {
+                forecast_days: String(SEASONAL_FORECAST_DAYS),
+                models: "ecmwf_seasonal_ensemble_mean_seamless",
+              })
+            : null,
+        ]);
+
+        const archivedDays = archive ? getDailyConditions(archive, now, "last") : new Map();
+        const seasonalDays = seasonal ? getDailyConditions(seasonal, now, "next") : new Map();
+        for (const result of results) {
+          const { key } = result;
+          result.last ??= findOccurrence(archivedDays, key, today, "last", archiveEnd);
+          if (!result.next) {
+            const estimate = findOccurrence(seasonalDays, key, today, "next", seasonalStart);
+            if (estimate) result.next = { ...estimate, seasonal: true };
+          }
+          createCell(weatherTypes[key].elemId, key, result);
+        }
       }
 
       /**
@@ -719,7 +712,7 @@
           forecast_days: "1",
         });
 
-        const url = new URL("https://api.open-meteo.com/v1/forecast");
+        const url = new URL(FORECAST_URL);
         url.search = params.toString();
 
         console.debug("[Weather] Fetching current weather:", url.toString());
