@@ -191,7 +191,7 @@
       </span>
     </div>
 
-    <div id="rain-timeline" style="visibility: hidden; padding-top: 120px">
+    <div id="rain-timeline" style="display: none; padding-top: 120px">
       <div class="graph">
         <div class="baseline"></div>
         <div class="hour-marker"></div>
@@ -370,6 +370,7 @@
         timeZone: "UTC",
         dateStyle: "long",
       });
+      const relativeDate = new Intl.RelativeTimeFormat("en-GB");
 
       /** @typedef {{ diff: number, date: string, seasonal?: boolean }} WeatherOccurrence */
       /** @typedef {{ last: WeatherOccurrence | null, next: WeatherOccurrence | null }} WeatherResult */
@@ -448,36 +449,25 @@
       };
 
       /**
-       * @param {string} key
-       * @param {number} diff
-       * @returns {string}
-       */
-      function getHumanReadableTimePeriod(key, diff) {
-        if (diff === 0) return `${key} earlier today`;
-        if (diff === 1) return `${key} yesterday`;
-        if (diff < 7) return `${key} ${diff} days ago`;
-        if (diff == 7) return `${key} last week`;
-        if (diff < 60) return `${key} ${Math.floor(diff / 7)} weeks ago`;
-
-        return `${key} ${Math.floor(diff / 30)} months ago`;
-      }
-
-      /**
        * @param {string} weatherType
-       * @param {WeatherOccurrence | null} nextData
+       * @param {WeatherOccurrence | null} occurrence
+       * @param {"last" | "next"} direction
        * @returns {string}
        */
-      function getHumanReadableFutureDate(weatherType, nextData) {
-        if (!nextData) return `no ${weatherType} date available`;
+      function describeOccurrence(weatherType, occurrence, direction) {
+        if (!occurrence) return `no ${weatherType} date available`;
 
-        const { diff } = nextData;
-        if (diff === 0) return `${weatherType} later today`;
-        if (diff === 1) return `${weatherType} tomorrow`;
-        if (diff < 7) return `${weatherType} in ${diff} days`;
-        if (diff == 7) return `${weatherType} next week`;
-        if (diff < 60) return `${weatherType} in ${Math.floor(diff / 7)} weeks`;
+        const { diff } = occurrence;
+        const past = direction === "last";
+        if (diff === 0) return `${weatherType} ${past ? "earlier" : "later"} today`;
+        if (diff === 1) return `${weatherType} ${past ? "yesterday" : "tomorrow"}`;
+        if (diff === 7) return `${weatherType} ${past ? "last" : "next"} week`;
 
-        return `${weatherType} in ${Math.floor(diff / 30)} months`;
+        const sign = past ? -1 : 1;
+        if (diff < 7) return `${weatherType} ${relativeDate.format(sign * diff, "day")}`;
+        if (diff < 30) return `${weatherType} ${relativeDate.format(sign * Math.floor(diff / 7), "week")}`;
+        if (diff < 365) return `${weatherType} ${relativeDate.format(sign * Math.floor(diff / 30), "month")}`;
+        return `${weatherType} ${relativeDate.format(sign * Math.floor(diff / 365), "year")}`;
       }
 
       /**
@@ -499,7 +489,7 @@
             data?.last
               ? `
           <h2 style="line-height:0.8;padding-block-start:1.2rem;margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data.last.diff}</h2>
-              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;"><time datetime="${data.last.date}" title="${displayDate.format(new Date(data.last.date))}">${getHumanReadableTimePeriod(key, data.last.diff)}</time></p>
+              <p style="margin:0;margin-bottom:12px;font-family:Figtree;color:white;text-align:center;opacity: 0.65;"><time datetime="${data.last.date}" title="${displayDate.format(new Date(data.last.date))}">${describeOccurrence(key, data.last, "last")}</time></p>
               `
               : `
               <h2 style="margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">unknown</h2>
@@ -510,8 +500,8 @@
               <h2 style="line-height:0.8;padding-block-start:1.2rem;margin:0;text-align:center;font-size:60px;font-weight:300;color:white;font-family: Bitcount Grid Double;">${data?.next?.diff ?? "n/a"}</h2>
               <p style="margin:0;font-family:Figtree;color:white;text-align:center;opacity: 0.65;">${
                 data.next
-                  ? `<time datetime="${data.next.date}" title="${displayDate.format(new Date(data.next.date))}">${getHumanReadableFutureDate(key, data.next)}</time>`
-                  : getHumanReadableFutureDate(key, null)
+                  ? `<time datetime="${data.next.date}" title="${displayDate.format(new Date(data.next.date))}">${describeOccurrence(key, data.next, "next")}</time>`
+                  : describeOccurrence(key, null, "next")
               }${data.next?.seasonal ? "<br>long-range estimate" : ""}</p>
             </span>
 
@@ -892,6 +882,19 @@
           return;
         }
 
+        const todayRainTimelineData = hourlyData.rain;
+        /** @type {NodeListOf<HTMLElement>} */
+        const columns = rainTimeline.querySelectorAll(".column");
+        const maxRain = Math.max(
+          0,
+          ...Array.from(columns, (column) =>
+            todayRainTimelineData[Number(column.dataset.index)] ?? 0,
+          ),
+        );
+        if (maxRain === 0) return;
+
+        rainTimeline.style.removeProperty("display");
+
         console.log(`Setting current hour position to ${currentHour}`);
 
         const currentHourPosition = Math.max(
@@ -904,37 +907,18 @@
           currentHourPosition.toString(),
         );
 
-        // Select all elements with the class .column
-        document
-          .querySelectorAll(".column")
-          .forEach((/** @type{HTMLElement} */ el) => {
-            const index = parseInt(el.dataset.index || "", 10);
-
-            // If data-index is lower than --hour-position, set opacity to 0.5
-            if (index < currentHourPosition + RAIN_TIMELINE_OFFSET) {
-              el.style.opacity = "0.5";
-            }
-          });
-
-        const todayRainTimelineData = hourlyData.rain;
-        console.debug("Today's rain timeline data:", todayRainTimelineData);
-
-        const noRain = todayRainTimelineData.every((rain) => rain === 0);
-        if (noRain) {
-          console.log("No rain expected today, hiding rain timeline");
-          return;
-        }
-
-        rainTimeline.style.visibility = "visible";
-
-        const maxRain = Math.max(...todayRainTimelineData);
         const HEAVY_RAIN_THRESHOLD = 2;
 
         const heaviness_offset = Math.min(1, maxRain / HEAVY_RAIN_THRESHOLD);
 
         console.debug("Max rain value for today:", maxRain);
 
-        todayRainTimelineData.forEach((rain, index) => {
+        columns.forEach((column) => {
+          const index = Number(column.dataset.index);
+          if (index < currentHourPosition + RAIN_TIMELINE_OFFSET) {
+            column.style.opacity = "0.5";
+          }
+          const rain = todayRainTimelineData[index] ?? 0;
           setBottomBar(index, Math.min((rain / maxRain) * heaviness_offset, 1));
         });
 
